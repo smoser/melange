@@ -1,0 +1,64 @@
+package:
+  name: shbang-test
+  version: 1
+  epoch: 0
+  description: shbang test
+  copyright:
+    - license: MIT
+
+environment:
+  contents:
+    packages:
+      - build-base
+      - busybox
+
+pipeline:
+  - runs: |
+      wbin() {
+          local f="$1"
+          cat > "$BD/usr/bin/$f"
+          echo "wrote usr/bin/$f" 1>&2
+          chmod 755 "$BD/usr/bin/$f"
+      }
+
+      BD=${{targets.destdir}}
+      mkdir -p "$BD/usr/bin"
+      mkdir -p "$BD/usr/share/doc/${{package.name}}"
+      cat > "$BD/usr/share/doc/${{package.name}}/README.md" << EOF
+      This is just a silly package with some executables
+      EOF
+
+      wbin "empty-file" </dev/null
+      echo -n "x" | wbin "almost-empty-file"
+
+      wbin "bash-via-env" <<"EOF"
+      #!/usr/bin/env bash
+      echo hi world
+      EOF
+
+      wbin "bash-straight-up" <<"EOF"
+      #!/bin/bash
+      echo hi from bash
+      EOF
+
+      wbin "python-via-env" <<"EOF"
+      #!/usr/bin/env python3
+      print("hello world")
+      EOF
+
+      wbin "python-straight" <<"EOF"
+      #!/usr/bin/python3
+      print("hello world")
+      EOF
+
+      cat > hello.c <<"EOF"
+      #include <stdio.h>
+      int main(int argc, char *argv[]) {
+          printf("hello world\n");
+      }
+      EOF
+
+      gcc -o hello hello.c && strip hello && cp hello "$BD/usr/bin/hello"
+
+update:
+  enabled: false
