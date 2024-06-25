@@ -5,9 +5,8 @@ Melange includes built-in pipelines to compile go projects. The first one,
 `go/install` focuses on simplicity.
 
 To get started quickly, we offer two working examples:
-[go-build.yaml](https://github.com/chainguard-dev/melange/blob/main/examples/go-build.yaml)
-and
-[go-install.yaml](https://github.com/chainguard-dev/melange/blob/main/examples/go-install.yaml)
+* [slash go-build.yaml](/examples/go-build.yaml)
+* [relative go-build.yaml](../examples/go-build.yaml)
 
 ## Simple and quick builds with `go/install`
 
