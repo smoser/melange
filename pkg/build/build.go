@@ -95,6 +95,7 @@ type Build struct {
 	Remove                bool
 	LintRequire, LintWarn []string
 	DefaultCPU            string
+	DefaultDisk           string
 	DefaultMemory         string
 	DefaultTimeout        time.Duration
 	Auth                  map[string]options.Auth
@@ -168,6 +169,7 @@ func New(ctx context.Context, opts ...Option) (*Build, error) {
 		config.WithEnvFileForParsing(b.EnvFile),
 		config.WithVarsFileForParsing(b.VarsFile),
 		config.WithDefaultCPU(b.DefaultCPU),
+		config.WithDefaultDisk(b.DefaultDisk),
 		config.WithDefaultMemory(b.DefaultMemory),
 		config.WithDefaultTimeout(b.DefaultTimeout),
 	)
@@ -750,6 +752,8 @@ func (b *Build) BuildPackage(ctx context.Context) error {
 
 	linterQueue := []linterTarget{}
 	cfg := b.WorkspaceConfig(ctx)
+
+	cfg.Disk = b.DefaultDisk
 
 	if !b.IsBuildLess() {
 		// Prepare guest directory
