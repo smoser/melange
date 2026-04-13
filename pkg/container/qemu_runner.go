@@ -405,8 +405,14 @@ func (bw *qemu) TerminatePod(ctx context.Context, cfg *Config) error {
 	defer secureDelete(ctx, cfg.InitramfsPath)
 	defer stopVirtiofsd(ctx, cfg)
 
-	clog.FromContext(ctx).Info("qemu: sending shutdown signal")
-	err := sendSSHCommand(ctx,
+	log := clog.FromContext(ctx)
+	log.Info("qemu: sending shutdown signal")
+	// The sysrq poweroff is asynchronous: the `echo o` is backgrounded so sh
+	// may exit cleanly (exit 0) before the VM powers off, or the VM may shut
+	// down fast enough that the SSH session is torn down before sh exits.
+	// Either way, ignore the SSH exit status and instead verify success by
+	// waiting for the qemu process to actually die.
+	_ = sendSSHCommand(ctx,
 		cfg.SSHControlClient,
 		cfg,
 		nil,
@@ -415,13 +421,22 @@ func (bw *qemu) TerminatePod(ctx context.Context, cfg *Config) error {
 		false,
 		[]string{"sh", "-c", "echo s > /proc/sysrq-trigger && echo o > /proc/sysrq-trigger&"},
 	)
-	if err != nil {
-		clog.FromContext(ctx).Warnf("failed to gracefully shutdown vm, killing it: %v", err)
-		// in case of graceful shutdown failure, axe it with pkill
-		return syscall.Kill(cfg.QemuPID, syscall.SIGKILL)
+
+	// Poll for the qemu process to exit naturally after receiving the shutdown
+	// signal. Signal 0 does not kill the process; it just checks existence.
+	const shutdownTimeout = 10 * time.Second
+	deadline := time.Now().Add(shutdownTimeout)
+	for time.Now().Before(deadline) {
+		if err := syscall.Kill(cfg.QemuPID, 0); err != nil {
+			// Any error (ESRCH, permission, etc.) means the process is gone.
+			log.Debug("qemu: vm shut down gracefully")
+			return nil
+		}
+		time.Sleep(250 * time.Millisecond)
 	}
 
-	return nil
+	log.Warnf("qemu: vm did not shut down within %s, killing it", shutdownTimeout)
+	return syscall.Kill(cfg.QemuPID, syscall.SIGKILL)
 }
 
 // WorkspaceTar implements Runner
@@ -1599,7 +1614,13 @@ func sendSSHCommand(ctx context.Context, client *ssh.Client,
 	clog.FromContext(ctx).Debugf("running (%d) %v", len(command), cmd)
 	err = session.Run(cmd)
 	if err != nil {
-		clog.FromContext(ctx).Errorf("Failed to run command %q: %v", cmd, err)
+		// ExitMissingError means the session was torn down cleanly (e.g. the
+		// VM shut down) without sending an exit status — not a real failure.
+		if _, ok := err.(*ssh.ExitMissingError); ok {
+			clog.FromContext(ctx).Debugf("command %q: session closed without exit status", cmd)
+		} else {
+			clog.FromContext(ctx).Errorf("Failed to run command %q: %v", cmd, err)
+		}
 		return err
 	}
 

@@ -902,6 +902,16 @@ func (b *Build) BuildPackage(ctx context.Context) error {
 		}
 	}
 
+	// Emit a clear success message so the final output is unambiguously positive.
+	builtVer := fmt.Sprintf("%s-r%d", b.Configuration.Package.Version, b.Configuration.Package.Epoch)
+	builtNames := make([]string, 0, 1+len(b.Configuration.Subpackages))
+	builtNames = append(builtNames, b.Configuration.Package.Name+"-"+builtVer)
+	for _, subpkg := range b.Configuration.Subpackages {
+		builtNames = append(builtNames, subpkg.Name+"-"+builtVer)
+	}
+	builtDir := filepath.Join(b.OutDir, b.Arch.ToAPK())
+	log.Infof("successfully built %d packages in %s [%s]", len(builtNames), builtDir, strings.Join(builtNames, " "))
+
 	return nil
 }
 
